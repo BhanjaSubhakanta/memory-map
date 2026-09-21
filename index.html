@@ -629,11 +629,6 @@
             updateDoc 
         } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
 
-        /*
-        // =========================================================================
-        // 🔑 YOUR CONFIGURED FIREBASE KEYS
-        // =========================================================================
-        */
         const FIREBASE_CONFIG = {
             apiKey: "AIzaSyC-H7bG1RZ5X0Axh2j6dhlJCzfvkrP2h44",
             authDomain: "memory-map-d7b51.firebaseapp.com",
@@ -649,7 +644,6 @@
 
         let app = null, auth = null, db = null, userId = null, firestoreUnsubscribe = null;
 
-        /* State variables */
         let map;
         let isAddingMode = false;
         let tempMarker = null;
@@ -696,7 +690,8 @@
             });
 
             /* Official OpenStreetMap Tiles (100% Free, No Watermarks) */
-            tileLayer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            /* Using const properly to avoid initialization errors */
+            const tileLayer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
                 maxZoom: 19
             }).addTo(map);
