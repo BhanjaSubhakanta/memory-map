@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
     <title>Minimalist Memory Map</title>
 
     <!-- Mobile Web App & PWA Capabilities -->
@@ -17,6 +18,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Phosphor Icons -->
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    
     <!-- Leaflet CSS & JS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -29,13 +31,13 @@
             background-color: #fafafa;
             color: #18181b;
             transition: background-color 0.3s ease, color 0.3s ease;
-            -webkit-tap-highlight-color: transparent;
         }
 
-        /* Desaturated minimalist map styling */
+        /* Custom SVG Filter for White Land & Black Oceans */
         .leaflet-tile-pane {
-            filter: grayscale(100%) contrast(105%);
-            transition: filter 0.3s ease;
+            filter: url(#minimalist-map-filter);
+            -webkit-filter: url(#minimalist-map-filter);
+            transition: filter 0.3s ease, -webkit-filter 0.3s ease;
         }
 
         /* Marker Styles */
@@ -103,7 +105,8 @@
             color: #f4f4f5;
         }
         body.dark-mode .leaflet-tile-pane {
-            filter: brightness(0.85) contrast(1.15);
+            filter: url(#minimalist-map-filter) invert(100%) brightness(0.95);
+            -webkit-filter: url(#minimalist-map-filter) invert(100%) brightness(0.95);
         }
         body.dark-mode .bg-white {
             background-color: #121215 !important;
@@ -197,6 +200,27 @@
     </style>
 </head>
 <body class="h-screen w-screen overflow-hidden flex flex-col relative select-none">
+    <!-- SVG Filter for Custom Map Styling (White Land, Light Black Ocean) -->
+    <svg xmlns="http://www.w3.org/2000/svg" style="width:0;height:0;position:absolute;visibility:hidden;">
+        <defs>
+            <filter id="minimalist-map-filter">
+                <!-- Isolates land and water based on RGB balance -->
+                <feColorMatrix type="matrix" values="
+                    1.2 0.6 -0.8 0 0
+                    1.2 0.6 -0.8 0 0
+                    1.2 0.6 -0.8 0 0
+                    0   0    0   1 0
+                "/>
+                <!-- Pushes land to extreme white and oceans to light black -->
+                <feComponentTransfer>
+                    <feFuncR type="linear" slope="2.0" intercept="-0.9"/>
+                    <feFuncG type="linear" slope="2.0" intercept="-0.9"/>
+                    <feFuncB type="linear" slope="2.0" intercept="-0.9"/>
+                </feComponentTransfer>
+            </filter>
+        </defs>
+    </svg>
+
     <!-- Fullscreen Map Canvas -->
     <div id="map" class="w-full h-full absolute inset-0 z-0"></div>
 
@@ -605,7 +629,11 @@
             updateDoc 
         } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
 
-        /* Configured Google Firebase Keys */
+        /*
+        // =========================================================================
+        // 🔑 YOUR CONFIGURED FIREBASE KEYS
+        // =========================================================================
+        */
         const FIREBASE_CONFIG = {
             apiKey: "AIzaSyC-H7bG1RZ5X0Axh2j6dhlJCzfvkrP2h44",
             authDomain: "memory-map-d7b51.firebaseapp.com",
@@ -635,8 +663,7 @@
         let searchDebounceTimeout = null;
         let editingPlaceId = null; 
         let isDarkMode = false;
-        let tileLayer = null;
-
+        
         /* Geolocation & Radar state */
         let userLocationMarker = null;
         let userCoordinates = null;
@@ -654,10 +681,6 @@
         /* Memory dataset */
         let places = [];
 
-        /* Basemap Tile URLs */
-        const LIGHT_TILES = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
-        const DARK_TILES = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
-
         function initApp() {
             const savedTheme = localStorage.getItem('mm_theme');
             if (savedTheme === 'dark') {
@@ -672,9 +695,9 @@
                 zoomControl: false
             });
 
-            tileLayer = L.tileLayer(isDarkMode ? DARK_TILES : LIGHT_TILES, {
-                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/">CARTO</a>',
-                subdomains: 'abcd',
+            /* Official OpenStreetMap Tiles (100% Free, No Watermarks) */
+            tileLayer = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
                 maxZoom: 19
             }).addTo(map);
 
@@ -789,7 +812,7 @@
                         authModal.classList.add('hidden');
                     });
                 } catch (err) {
-                    console.warn("Firebase initialization error:", err);
+                    console.warn("Firebase initialization warning, loading local storage:", err);
                     loadPlacesFromLocalStorage();
                 }
             } else {
@@ -824,7 +847,7 @@
                 renderAllPlaces();
                 renderAlbumDrawer();
             }, (err) => {
-                console.warn("Firestore snapshot error, switching to local:", err);
+                console.warn("Firestore snapshot error, falling back to local:", err);
                 loadPlacesFromLocalStorage();
             });
         }
@@ -948,7 +971,7 @@
                     },
                     (err) => {
                         locateIcon.className = 'ph ph-crosshair text-base';
-                        console.warn("Geolocation error:", err.message);
+                        console.warn("Geolocation warning:", err.message);
                         const radarTitle = document.getElementById('radar-title');
                         const radarDesc = document.getElementById('radar-desc');
                         radarTitle.innerText = "Location Access";
@@ -961,7 +984,7 @@
             });
         }
 
-        /* Calculate Haversine distance in kilometers */
+        /* Haversine distance formula (km) */
         function computeDistanceKm(lat1, lon1, lat2, lon2) {
             const R = 6371;
             const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -1144,12 +1167,10 @@
                     document.body.classList.add('dark-mode');
                     themeIcon.className = 'ph ph-sun text-base';
                     localStorage.setItem('mm_theme', 'dark');
-                    tileLayer.setUrl(DARK_TILES);
                 } else {
                     document.body.classList.remove('dark-mode');
                     themeIcon.className = 'ph ph-moon text-base';
                     localStorage.setItem('mm_theme', 'light');
-                    tileLayer.setUrl(LIGHT_TILES);
                 }
                 renderTripPolylines();
             });
@@ -1160,7 +1181,7 @@
                 if (places.length === 0) return;
 
                 const exportData = {
-                    version: '2.5',
+                    version: '3.0',
                     appName: 'Minimalist Memory Map',
                     exportDate: new Date().toISOString(),
                     totalPlaces: places.length,
@@ -1900,7 +1921,7 @@
             return 'ph-tag';
         }
 
-        /* Start app on load */
+        /* Initialize App on Load */
         initApp();
     </script>
 </body>
